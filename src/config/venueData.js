@@ -1,0 +1,104 @@
+export const VENUES = {
+  ESCAPE_TIME: 'Escape Time',
+  LASER_SHOOTER: 'Laser Shooter',
+};
+
+export const PAYMENT_METHODS = [
+  'Cash',
+  'Card',
+  'UPI-New Pay',
+  'Prepaid by District',
+  'Razorpay (Website Bookings)',
+  'Activity Kids',
+];
+
+export const OFFERS = [
+  { id: 'none', name: 'No Discount (Standard Rate)', percentage: 0 },
+  { id: 'high_price_retention', name: 'Customer Going back due to high prices (10% OFF)', percentage: 10 },
+  { id: 'birthday_package', name: 'Birthday Package (10% OFF)', percentage: 10 },
+  { id: 'second_game', name: 'Second Game Special (20% OFF)', percentage: 20 },
+  { id: 'cross_promotion', name: 'Cross Promotion Coupon (30% OFF)', percentage: 30, venue: VENUES.ESCAPE_TIME },
+  { id: 'complimentary', name: 'Complimentary Game (Kids Under 6 Years - 100% OFF)', percentage: 100 },
+];
+
+export const REFERENCES = [
+  'Rehan Sir',
+  'Khaja Sir',
+  'Manager Reference'
+];
+
+export const CLOSING_STAFF = [
+  'Rehan',
+  'Rajeshwari',
+  'Muqeet',
+  'Junaid',
+  'Prashanth'
+];
+
+export const VENUE_DETAILS = {
+  [VENUES.ESCAPE_TIME]: {
+    id: 'escape_time',
+    name: 'Escape Time',
+    tagline: 'Can You Escape in Time? Unravel Mysteries, Decode Clues.',
+    theme: {
+      primary: '#dc2626',
+      accent: '#f59e0b',
+      gradient: 'from-amber-600/30 via-red-950/60 to-slate-950',
+      cardBg: 'bg-red-950/90 border-amber-500/60 hover:border-amber-400',
+      badgeBg: 'bg-red-950 text-amber-300 border border-amber-500/60',
+      glow: 'shadow-[0_0_30px_rgba(220,38,38,0.3)]',
+    },
+    games: [
+      { id: 'locked_inn', name: 'Locked Inn', duration: 60, type: 'Mystery Game' },
+      { id: 'bank_heist', name: 'Bank Heist', duration: 60, type: 'Mystery Game' },
+      { id: 'phonebooth', name: 'Phonebooth', duration: 30, type: 'Mystery Game' },
+      { id: 'haunted_elevator', name: 'Haunted Elevator', duration: 30, type: 'Mystery Game' },
+      { id: 'world_war_bunker', name: 'World War Bunker', duration: 30, type: 'Mystery Game' },
+    ]
+  },
+  [VENUES.LASER_SHOOTER]: {
+    id: 'laser_shooter',
+    name: 'Laser Shooter',
+    tagline: 'High-Tech Laser Tag Arena. Gear Up, Aim Fast, Outsmart Foes.',
+    theme: {
+      primary: '#06b6d4',
+      accent: '#10b981',
+      gradient: 'from-cyan-900/30 via-slate-950 to-emerald-950/40',
+      cardBg: 'bg-cyan-950/90 border-cyan-500/60 hover:border-cyan-400',
+      badgeBg: 'bg-cyan-950 text-cyan-300 border border-cyan-500/60',
+      glow: 'shadow-[0_0_30px_rgba(6,182,212,0.3)]',
+    },
+    games: [
+      { id: '10_mins', name: '10 Mins Game', duration: 10, type: 'Laser Arena' },
+      { id: '20_mins', name: '20 Mins Game', duration: 20, type: 'Laser Arena' },
+      { id: '30_mins', name: '30 Mins Game', duration: 30, type: 'Laser Arena' },
+    ]
+  }
+};
+
+export const isWeekend = (dateString) => {
+  if (!dateString) return false;
+  const d = new Date(dateString);
+  const day = d.getDay();
+  return day === 0 || day === 6;
+};
+
+export const getOperatingHours = (dateString) => {
+  const weekend = isWeekend(dateString);
+  if (weekend) {
+    return {
+      start: '10:30',
+      end: '23:00',
+      startMinutes: 10 * 60 + 30,
+      endMinutes: 23 * 60,
+      label: '10:30 AM – 11:00 PM (Weekend)'
+    };
+  }
+  return {
+    start: '11:00',
+    end: '22:00',
+    startMinutes: 11 * 60,
+    endMinutes: 22 * 60,
+    label: '11:00 AM – 10:00 PM (Weekday)'
+  };
+};
