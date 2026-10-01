@@ -1,8 +1,10 @@
 import { VENUES, isWeekend, OFFERS } from '../config/venueData.js';
 
-export const calculatePricing = ({ venue, gameName, paxCount, date, offerId = 'none' }) => {
+export const calculatePricing = ({ venue, gameName, paxCount, date, offerId = 'none', isWeekendOverride = null }) => {
   const pax = Math.max(0, parseInt(paxCount, 10) || 0);
-  const weekend = isWeekend(date);
+  const weekend = isWeekendOverride !== null && isWeekendOverride !== undefined 
+    ? Boolean(isWeekendOverride) 
+    : isWeekend(date);
 
   let ratePerPax = 0;
   let tierLabel = '';

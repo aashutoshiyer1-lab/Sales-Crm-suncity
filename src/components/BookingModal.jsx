@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { VENUES, VENUE_DETAILS, PAYMENT_METHODS, OFFERS, REFERENCES, getOperatingHours } from '../config/venueData';
+import { VENUES, VENUE_DETAILS, PAYMENT_METHODS, OFFERS, REFERENCES, getOperatingHours, isWeekend } from '../config/venueData';
 import { calculatePricing } from '../utils/pricingEngine';
 import { 
   X, 
@@ -19,7 +19,8 @@ import {
   Calendar as CalendarIcon,
   Clock,
   Clock3,
-  Gift
+  Gift,
+  Sparkles
 } from 'lucide-react';
 
 export const BookingModal = ({ 
@@ -38,6 +39,8 @@ export const BookingModal = ({
   const [paxCount, setPaxCount] = useState('');
   const [gameName, setGameName] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [isWeekendRate, setIsWeekendRate] = useState(() => isWeekend(new Date().toISOString().split('T')[0]));
+  const [isRateManuallyOverridden, setIsRateManuallyOverridden] = useState(false);
   const [timeSlot, setTimeSlot] = useState('11:00');
   const [offerId, setOfferId] = useState('none');
   const [referencePerson, setReferencePerson] = useState('Rehan Sir');
@@ -88,7 +91,15 @@ export const BookingModal = ({
       setEmail(editingBooking.email || '');
       setPaxCount(editingBooking.paxCount ? String(editingBooking.paxCount) : '');
       setGameName(editingBooking.gameName || '');
-      setDate(editingBooking.date || new Date().toISOString().split('T')[0]);
+      const editDate = editingBooking.date || new Date().toISOString().split('T')[0];
+      setDate(editDate);
+      const weekendVal = editingBooking.isWeekendRate !== undefined
+        ? Boolean(editingBooking.isWeekendRate)
+        : editingBooking.isWeekend !== undefined
+          ? Boolean(editingBooking.isWeekend)
+          : isWeekend(editDate);
+      setIsWeekendRate(weekendVal);
+      setIsRateManuallyOverridden(Boolean(editingBooking.isRateManuallyOverridden || (weekendVal !== isWeekend(editDate))));
       setTimeSlot(editingBooking.timeSlot || '11:00');
       setOfferId(editingBooking.offerId || 'none');
       setReferencePerson(editingBooking.referencePerson || 'Rehan Sir');
@@ -109,7 +120,10 @@ export const BookingModal = ({
       setEmail('');
       setPaxCount('');
       setGameName('');
-      setDate(initialSlot.date || new Date().toISOString().split('T')[0]);
+      const slotDate = initialSlot.date || new Date().toISOString().split('T')[0];
+      setDate(slotDate);
+      setIsWeekendRate(isWeekend(slotDate));
+      setIsRateManuallyOverridden(false);
       setTimeSlot(initialSlot.timeSlot || '11:00');
       setOfferId('none');
       setReferencePerson('Rehan Sir');
@@ -124,6 +138,19 @@ export const BookingModal = ({
       });
     }
   }, [isOpen, editingBooking, initialSlot]);
+
+  // Handler when user changes date: automatically sets the rate for that day
+  const handleDateChange = (newDate) => {
+    setDate(newDate);
+    setIsWeekendRate(isWeekend(newDate));
+    setIsRateManuallyOverridden(false);
+  };
+
+  // Handler when staff manually toggles Weekday vs Weekend rate
+  const handleRateToggle = (weekendVal) => {
+    setIsWeekendRate(weekendVal);
+    setIsRateManuallyOverridden(weekendVal !== isWeekend(date));
+  };
 
   // Auto-adapt timeSlot whenever date changes to match valid operating hours for that day (weekday vs weekend)
   useEffect(() => {
@@ -141,6 +168,7 @@ export const BookingModal = ({
     paxCount,
     date,
     offerId,
+    isWeekendOverride: isWeekendRate,
   });
 
   const isComplimentary = offerId === 'complimentary';
@@ -210,6 +238,11 @@ export const BookingModal = ({
       paxCount: parseInt(paxCount, 10),
       date,
       timeSlot,
+      rateType: isWeekendRate ? 'weekend' : 'weekday',
+      isWeekend: isWeekendRate,
+      isWeekendRate,
+      isRateManuallyOverridden,
+      ratePerPax: pricingInfo.ratePerPax,
       offerId: pricingInfo.offerId,
       offerName: pricingInfo.offerName,
       discountPercentage: pricingInfo.discountPercentage,
@@ -377,7 +410,7 @@ export const BookingModal = ({
                 <input
                   type="date"
                   value={date}
-                  onChange={(e) => setDate(e.target.value)}
+                  onChange={(e) => handleDateChange(e.target.value)}
                   className="w-full px-2 py-1.5 rounded-lg bg-white border border-cyan-300 text-xs font-mono font-bold text-slate-900 focus:outline-none cursor-pointer"
                 />
               </div>
@@ -397,6 +430,64 @@ export const BookingModal = ({
                     </option>
                   ))}
                 </select>
+              </div>
+            </div>
+
+            {/* Pricing Rate Mode Selection (Weekday vs Weekend) */}
+            <div className="p-2.5 rounded-2xl bg-slate-100/90 border border-slate-300 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className={`p-1.5 rounded-xl border ${
+                  isWeekendRate 
+                    ? 'bg-amber-100 text-amber-700 border-amber-300' 
+                    : 'bg-cyan-100 text-cyan-700 border-cyan-300'
+                }`}>
+                  <Sparkles className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-black text-slate-800 uppercase tracking-wider">
+                      Rate Mode:
+                    </span>
+                    <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                      isWeekendRate ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-cyan-100 text-cyan-800 border border-cyan-300'
+                    }`}>
+                      {isWeekendRate ? 'Weekend Rate' : 'Weekday Rate'}
+                    </span>
+                    {isRateManuallyOverridden && (
+                      <span className="text-[9px] font-mono font-extrabold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 border border-amber-400">
+                        ⚡ Overridden
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    Auto-set for {isWeekend(date) ? 'Weekend' : 'Weekday'}. Click to toggle rate if charging differently.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center p-0.5 rounded-xl bg-white border border-slate-300 shadow-sm shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleRateToggle(false)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                    !isWeekendRate
+                      ? 'bg-cyan-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  Weekday
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRateToggle(true)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                    isWeekendRate
+                      ? 'bg-amber-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  Weekend
+                </button>
               </div>
             </div>
 
@@ -467,7 +558,7 @@ export const BookingModal = ({
               <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded-full ${
                 pricingInfo.isWeekend ? 'bg-amber-200 text-amber-900 border border-amber-400' : 'bg-cyan-200 text-cyan-900 border border-cyan-400'
               }`}>
-                {pricingInfo.dayType}
+                {pricingInfo.dayType}{isRateManuallyOverridden ? ' • Overridden' : ''}
               </span>
             </div>
 

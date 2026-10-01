@@ -91,7 +91,7 @@ export const BookingDetailModal = ({
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
             <div className="p-2.5 rounded-2xl bg-slate-50 border border-slate-200">
               <div className="text-[10px] text-slate-500 font-bold uppercase">Date</div>
               <div className="font-mono font-bold text-slate-900 text-xs mt-0.5">{booking.date}</div>
@@ -103,6 +103,14 @@ export const BookingDetailModal = ({
             <div className="p-2.5 rounded-2xl bg-slate-50 border border-slate-200">
               <div className="text-[10px] text-slate-500 font-bold uppercase">Players</div>
               <div className="font-mono font-bold text-amber-700 text-xs mt-0.5">{booking.paxCount} pax</div>
+            </div>
+            <div className="p-2.5 rounded-2xl bg-slate-50 border border-slate-200">
+              <div className="text-[10px] text-slate-500 font-bold uppercase">Rate Type</div>
+              <div className={`font-mono font-extrabold text-xs mt-0.5 ${
+                booking.isWeekend ? 'text-amber-800' : 'text-cyan-800'
+              }`}>
+                {booking.isWeekend ? 'Weekend' : 'Weekday'}
+              </div>
             </div>
           </div>
 

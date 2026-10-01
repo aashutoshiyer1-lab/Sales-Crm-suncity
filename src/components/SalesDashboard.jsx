@@ -696,6 +696,11 @@ export const SalesDashboard = ({
                           <span className="text-[11px] font-bold text-slate-600 font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                             ({getGameCategoryLabel(b)})
                           </span>
+                          <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded border ${
+                            b.isWeekend ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-cyan-50 text-cyan-800 border-cyan-200'
+                          }`}>
+                            {b.isWeekend ? 'Weekend' : 'Weekday'}
+                          </span>
                         </div>
                       </td>
 
