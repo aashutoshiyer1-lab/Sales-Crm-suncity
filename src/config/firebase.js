@@ -7,6 +7,11 @@ import {
   remove,
   get
 } from 'firebase/database';
+import {
+  getAuth,
+  signInAnonymously,
+  onAuthStateChanged
+} from 'firebase/auth';
 
 // ─── Firebase Config ─────────────────────────────────────────────
 const DATABASE_URL = import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://sales-crm-suncity-default-rtdb.firebaseio.com";
@@ -25,10 +30,48 @@ const firebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const rtdb = getDatabase(app);
+const auth = getAuth(app);
+
+// ─── Automatic Silent Anonymous Authentication ───────────────────
+let authReadyPromise = null;
+export function ensureAuth() {
+  if (!authReadyPromise) {
+    authReadyPromise = new Promise((resolve) => {
+      onAuthStateChanged(auth, async (user) => {
+        if (user) {
+          resolve(user);
+        } else {
+          try {
+            const credential = await signInAnonymously(auth);
+            resolve(credential.user);
+          } catch (err) {
+            console.warn('[Firebase Auth] Anonymous sign-in notice (enable Anonymous in Firebase Console):', err.message);
+            resolve(null);
+          }
+        }
+      });
+    });
+  }
+  return authReadyPromise;
+}
+
+// Auto-trigger auth check on load
+ensureAuth();
+
+async function getAuthToken() {
+  try {
+    if (auth.currentUser) {
+      return await auth.currentUser.getIdToken();
+    }
+  } catch (e) {}
+  return null;
+}
 
 // ─── REST API helpers (bulletproof fallback) ─────────────────────
 async function restPut(path, data) {
-  const res = await fetch(`${DATABASE_URL}/${path}.json`, {
+  const token = await getAuthToken();
+  const url = token ? `${DATABASE_URL}/${path}.json?auth=${token}` : `${DATABASE_URL}/${path}.json`;
+  const res = await fetch(url, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -38,14 +81,18 @@ async function restPut(path, data) {
 }
 
 async function restDelete(path) {
-  const res = await fetch(`${DATABASE_URL}/${path}.json`, {
+  const token = await getAuthToken();
+  const url = token ? `${DATABASE_URL}/${path}.json?auth=${token}` : `${DATABASE_URL}/${path}.json`;
+  const res = await fetch(url, {
     method: 'DELETE',
   });
   if (!res.ok) throw new Error(`REST DELETE failed: ${res.status}`);
 }
 
 async function restGet(path) {
-  const res = await fetch(`${DATABASE_URL}/${path}.json`);
+  const token = await getAuthToken();
+  const url = token ? `${DATABASE_URL}/${path}.json?auth=${token}` : `${DATABASE_URL}/${path}.json`;
+  const res = await fetch(url);
   if (!res.ok) throw new Error(`REST GET failed: ${res.status}`);
   return res.json();
 }
@@ -199,4 +246,4 @@ export const resetAllBookings = async () => {
   }
 };
 
-export { rtdb };
+export { rtdb, auth };
