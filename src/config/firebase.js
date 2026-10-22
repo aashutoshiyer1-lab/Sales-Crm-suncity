@@ -99,8 +99,9 @@ async function restGet(path) {
 
 // ─── Helper: Convert data object to sorted array ─────────────────
 function dataToArray(data) {
-  if (!data || typeof data !== 'object') return [];
+  if (!data || typeof data !== 'object' || data.error) return [];
   return Object.keys(data)
+    .filter(key => key !== 'error' && data[key] && typeof data[key] === 'object')
     .map(key => ({ id: key, ...data[key] }))
     .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 }
@@ -247,3 +248,93 @@ export const resetAllBookings = async () => {
 };
 
 export { rtdb, auth };
+
+// ─── Manual Discount Entries Management ────────────────────────
+export const MANUAL_DISCOUNTS_COLLECTION = "manual_discounts";
+
+export const subscribeManualDiscounts = (callback) => {
+  let cached = [];
+  try {
+    const raw = localStorage.getItem("crm_cached_manual_discounts");
+    if (raw) cached = JSON.parse(raw);
+  } catch (e) {}
+  if (cached.length > 0) callback(cached);
+
+  try {
+    const discountsRef = ref(rtdb, MANUAL_DISCOUNTS_COLLECTION);
+    onValue(discountsRef, (snapshot) => {
+      const list = snapshot.exists() ? dataToArray(snapshot.val()) : [];
+      try {
+        localStorage.setItem("crm_cached_manual_discounts", JSON.stringify(list));
+      } catch (e) {}
+      callback(list);
+    }, (error) => {
+      console.warn("[Firebase] manual_discounts listener error:", error.message);
+    });
+  } catch (e) {
+    console.warn("[Firebase] manual_discounts setup error:", e.message);
+  }
+
+  const poll = async () => {
+    try {
+      const data = await restGet(MANUAL_DISCOUNTS_COLLECTION);
+      const list = dataToArray(data);
+      try {
+        localStorage.setItem("crm_cached_manual_discounts", JSON.stringify(list));
+      } catch (e) {}
+      callback(list);
+    } catch (e) {}
+  };
+  poll();
+  const interval = setInterval(poll, 4000);
+
+  return () => clearInterval(interval);
+};
+
+export const saveManualDiscount = async (entry) => {
+  const entryId = entry.id || `discount-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+  const payload = {
+    ...entry,
+    id: entryId,
+    createdAt: entry.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  try {
+    const current = JSON.parse(localStorage.getItem("crm_cached_manual_discounts") || "[]");
+    const index = current.findIndex(e => e.id === entryId);
+    let updated;
+    if (index >= 0) {
+      updated = [...current];
+      updated[index] = payload;
+    } else {
+      updated = [payload, ...current];
+    }
+    localStorage.setItem("crm_cached_manual_discounts", JSON.stringify(updated));
+  } catch (e) {}
+
+  try {
+    await set(ref(rtdb, `${MANUAL_DISCOUNTS_COLLECTION}/${entryId}`), payload);
+  } catch (e) {
+    try {
+      await restPut(`${MANUAL_DISCOUNTS_COLLECTION}/${entryId}`, payload);
+    } catch (e2) {}
+  }
+  return payload;
+};
+
+export const deleteManualDiscount = async (entryId) => {
+  try {
+    const current = JSON.parse(localStorage.getItem("crm_cached_manual_discounts") || "[]");
+    const updated = current.filter(e => e.id !== entryId);
+    localStorage.setItem("crm_cached_manual_discounts", JSON.stringify(updated));
+  } catch (e) {}
+
+  try {
+    await remove(ref(rtdb, `${MANUAL_DISCOUNTS_COLLECTION}/${entryId}`));
+  } catch (e) {
+    try {
+      await restDelete(`${MANUAL_DISCOUNTS_COLLECTION}/${entryId}`);
+    } catch (e2) {}
+  }
+};

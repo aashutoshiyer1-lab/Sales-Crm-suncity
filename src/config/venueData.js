@@ -18,7 +18,12 @@ export const OFFERS = [
   { id: 'birthday_package', name: 'Birthday Package (10% OFF)', percentage: 10 },
   { id: 'second_game', name: 'Second Game Special (20% OFF)', percentage: 20 },
   { id: 'cross_promotion', name: 'Cross Promotion Coupon (30% OFF)', percentage: 30, venue: VENUES.ESCAPE_TIME },
-  { id: 'complimentary', name: 'Complimentary Game (Kids Under 6 Years - 100% OFF)', percentage: 100 },
+  { id: 'cross_promotion_brochure', name: 'Cross Promotion Brochure (30% OFF)', percentage: 30, venue: VENUES.ESCAPE_TIME },
+  { id: 'corporate_package', name: 'Corporate Package (15% OFF)', percentage: 15 },
+  { id: 'complimentary', name: 'Complimentary Game (Kids Under 5 Years - 100% OFF)', percentage: 100 },
+  { id: 'district_app', name: 'District Prepaid Booking', percentage: 0 },
+  { id: 'website_booking', name: 'Website Booking (Razorpay)', percentage: 0 },
+  { id: 'activity_kids', name: 'Activity Kids Booking', percentage: 0 },
 ];
 
 export const REFERENCES = [
@@ -49,8 +54,8 @@ export const VENUE_DETAILS = {
       glow: 'shadow-[0_0_30px_rgba(220,38,38,0.3)]',
     },
     games: [
-      { id: 'locked_inn', name: 'Locked Inn', duration: 60, type: 'Mystery Game' },
       { id: 'bank_heist', name: 'Bank Heist', duration: 60, type: 'Mystery Game' },
+      { id: 'locked_in', name: 'Locked In', duration: 60, type: 'Mystery Game' },
       { id: 'phonebooth', name: 'Phonebooth', duration: 30, type: 'Mystery Game' },
       { id: 'haunted_elevator', name: 'Haunted Elevator', duration: 30, type: 'Mystery Game' },
       { id: 'world_war_bunker', name: 'World War Bunker', duration: 30, type: 'Mystery Game' },

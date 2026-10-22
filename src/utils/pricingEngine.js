@@ -10,7 +10,7 @@ export const calculatePricing = ({ venue, gameName, paxCount, date, offerId = 'n
   let tierLabel = '';
 
   if (pax > 0 && gameName && gameName !== '') {
-    if (venue === VENUES.ESCAPE_TIME) {
+    if (venue === VENUES.ESCAPE_TIME || venue === 'Escape Time') {
       // 60-Minute Mystery Games: Locked Inn, Bank Heist
       if (
         gameName === 'Locked Inn' || 
@@ -33,8 +33,10 @@ export const calculatePricing = ({ venue, gameName, paxCount, date, offerId = 'n
       // 30-Minute Mystery Games: Phonebooth, Haunted Elevator, World War Bunker
       else if (
         gameName === 'Phonebooth' || 
+        gameName === 'Phone booth' ||
         gameName === 'Haunted Elevator' || 
         gameName === 'World War Bunker' ||
+        gameName === 'Bunker' ||
         gameName === 'Spy Agents'
       ) {
         if (pax <= 3) {
@@ -48,7 +50,7 @@ export const calculatePricing = ({ venue, gameName, paxCount, date, offerId = 'n
           tierLabel = '7+ Players Category';
         }
       }
-    } else if (venue === VENUES.LASER_SHOOTER) {
+    } else if (venue === VENUES.LASER_SHOOTER || venue === 'Laser Shooter') {
       tierLabel = 'Flat Rate Arena';
       const gLower = gameName.toLowerCase();
       // 10 Mins Game
@@ -69,11 +71,12 @@ export const calculatePricing = ({ venue, gameName, paxCount, date, offerId = 'n
   const baseTotal = ratePerPax * pax;
 
   const selectedOffer = OFFERS.find(o => o.id === offerId) || OFFERS[0];
-  const discountPercentage = selectedOffer.percentage || 0;
+  const isComplimentary = offerId === 'complimentary';
+  const discountPercentage = isComplimentary ? 100 : (selectedOffer.percentage || 0);
   
-  // 100% OFF for Complimentary Game (Kids Under 6 Years)
-  const discountAmount = Math.round((baseTotal * discountPercentage) / 100);
-  const finalTotalAmount = Math.max(0, baseTotal - discountAmount);
+  // 100% OFF for Complimentary Game (Kids Under 5 Years)
+  const discountAmount = isComplimentary ? baseTotal : Math.round((baseTotal * discountPercentage) / 100);
+  const finalTotalAmount = isComplimentary ? 0 : Math.max(0, baseTotal - discountAmount);
 
   return {
     ratePerPax,
@@ -90,14 +93,52 @@ export const calculatePricing = ({ venue, gameName, paxCount, date, offerId = 'n
   };
 };
 
-export const getGameCategoryLabel = (booking) => {
-  if (!booking) return '';
-  if (booking.venue === VENUES.LASER_SHOOTER) {
-    return 'Flat Rate Arena';
+export const getBookingCategory = (booking, allBookings = []) => {
+  if (!booking) return '2-3';
+  if (booking.venue !== 'Escape Time' && booking.venue !== VENUES.ESCAPE_TIME) return 'laser';
+
+  // 1. Explicit Category Override from modal confirmation
+  if (booking.categoryOverride) {
+    if (booking.categoryOverride.includes('2-3')) return '2-3';
+    if (booking.categoryOverride.includes('4-6')) return '4-6';
+    if (booking.categoryOverride.includes('7+')) return '7+';
+    return booking.categoryOverride;
   }
+
+  // 2. Sibling Group Inheritance (Inherit bracket from paying group in same room/time)
+  const isComplimentary = booking.offerId === 'complimentary' || Number(booking.totalAmount) === 0;
+  if (isComplimentary && Array.isArray(allBookings) && allBookings.length > 0) {
+    const sibling = allBookings.find(b => 
+      b.id !== booking.id &&
+      b.status !== 'Cancelled' &&
+      b.date === booking.date &&
+      (b.venue === 'Escape Time' || b.venue === VENUES.ESCAPE_TIME) &&
+      Number(b.totalAmount) > 0 &&
+      (
+        (b.timeSlot && booking.timeSlot && b.timeSlot === booking.timeSlot && b.gameName === booking.gameName) ||
+        (b.phone && booking.phone && b.phone === booking.phone && b.phone.length > 5) ||
+        (b.customerName && booking.customerName && b.customerName.trim().toLowerCase() === booking.customerName.trim().toLowerCase())
+      )
+    );
+    if (sibling) return getBookingCategory(sibling, []);
+  }
+
+  // 3. Fallback: Default complimentary to '4-6' instead of '2-3'
   const pax = Number(booking.paxCount) || 0;
-  if (pax <= 3) return '2-3 Players Category';
-  if (pax <= 6) return '4-6 Players Category';
-  return '7+ Players Category';
+  if (pax >= 7) return '7+';
+  if (pax >= 4) return '4-6';
+  if (isComplimentary) return '4-6';
+  return '2-3';
 };
 
+export const getGameCategoryLabel = (booking, allBookings = []) => {
+  if (!booking) return '';
+  if (booking.venue === VENUES.LASER_SHOOTER || booking.venue === 'Laser Shooter') {
+    return 'Flat Rate Arena';
+  }
+  const cat = getBookingCategory(booking, allBookings);
+  if (cat === '2-3') return '2-3 Players Category';
+  if (cat === '4-6') return '4-6 Players Category';
+  if (cat === '7+') return '7+ Players Category';
+  return `${cat} Players Category`;
+};

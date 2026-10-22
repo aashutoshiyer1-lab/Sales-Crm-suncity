@@ -30,6 +30,7 @@ export const CalendarDashboard = ({
 }) => {
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [gameFilter, setGameFilter] = useState('ALL');
+  const [showLateNightSlots, setShowLateNightSlots] = useState(false);
 
   const currentVenueDetails = VENUE_DETAILS[activeVenue];
   const isEscapeTime = activeVenue === VENUES.ESCAPE_TIME;
@@ -92,6 +93,51 @@ export const CalendarDashboard = ({
       return matchVenue && matchDate && matchGame;
     });
   }, [bookings, activeVenue, selectedDate, gameFilter]);
+
+  // Check if any active booking falls into late night window
+  const hasLateNightBookings = useMemo(() => {
+    return activeBookings.some(b => {
+      if (!b.timeSlot) return false;
+      const [hStr, mStr] = b.timeSlot.split(':');
+      const h = parseInt(hStr, 10) || 0;
+      const m = parseInt(mStr, 10) || 0;
+      const mins = (h <= 2 ? h + 24 : h) * 60 + m;
+      return mins > operatingHours.endMinutes;
+    });
+  }, [activeBookings, operatingHours.endMinutes]);
+
+  // Main 45 slots preserved 100%; late night slots added ONLY if toggled or if late bookings exist
+  const visibleTimeSlots = useMemo(() => {
+    if (!showLateNightSlots && !hasLateNightBookings) {
+      return timeSlots; // Exactly the 45 main slots on weekday, 51 on weekend!
+    }
+
+    const extended = [...timeSlots];
+    let lateMinutes = operatingHours.endMinutes + 15;
+    const maxLateMinutes = 25 * 60; // 1:00 AM
+
+    while (lateMinutes <= maxLateMinutes) {
+      const totalH = Math.floor(lateMinutes / 60);
+      const m = lateMinutes % 60;
+      const normH = totalH % 24;
+      const timeStr = `${String(normH).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      const period = totalH >= 24 ? 'AM' : 'PM';
+      let h12 = normH % 12;
+      if (h12 === 0) h12 = 12;
+      const displayLabel = `${h12}:${String(m).padStart(2, '0')} ${period}`;
+
+      extended.push({
+        timeStr,
+        displayLabel,
+        minutes: lateMinutes,
+        isLate: true
+      });
+
+      lateMinutes += 15;
+    }
+
+    return extended;
+  }, [timeSlots, showLateNightSlots, hasLateNightBookings, operatingHours.endMinutes]);
 
   const slotBookingsMap = useMemo(() => {
     const map = {};
@@ -288,19 +334,39 @@ export const CalendarDashboard = ({
       <div className="space-y-4">
         
         {/* Section Header */}
-        <div className="flex items-center justify-between px-2">
-          <div className="flex items-center gap-2 text-base font-extrabold text-slate-900">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-2">
+          <div className="flex items-center gap-2 text-base font-extrabold text-slate-900 flex-wrap">
             <Grid className="w-5 h-5 text-cyan-600" />
-            <span>Time Slots Schedule Grid ({timeSlots.length} Slots)</span>
+            <span>Time Slots Schedule Grid ({timeSlots.length} Main Slots)</span>
+            {(showLateNightSlots || hasLateNightBookings) && (
+              <span className="px-2.5 py-0.5 rounded-lg text-xs font-mono font-black bg-amber-100 text-amber-900 border border-amber-300">
+                🌙 +{visibleTimeSlots.length - timeSlots.length} Late Night Slots (Until 1 AM)
+              </span>
+            )}
           </div>
-          <span className="text-xs sm:text-sm text-slate-500 font-mono font-medium">
-            Side-by-side time slot blocks • Click card or + Book to add game
-          </span>
+          
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowLateNightSlots(!showLateNightSlots)}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-mono font-bold transition-all flex items-center gap-1.5 border shadow-xs ${
+                showLateNightSlots || hasLateNightBookings
+                  ? 'bg-amber-600 hover:bg-amber-700 text-white border-amber-700 font-extrabold shadow-sm'
+                  : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+              }`}
+              title="Toggle extended late night slots up to 1:00 AM"
+            >
+              <span>🌙 {showLateNightSlots ? 'Hide Late Night Slots' : '+ Late Night Slots (Until 1 AM)'}</span>
+            </button>
+            <span className="text-xs sm:text-sm text-slate-500 font-mono font-medium hidden md:inline">
+              Side-by-side slot blocks • Click card or + Book
+            </span>
+          </div>
         </div>
 
         {/* Multi-Column Side-by-Side Grid Layout - Scaled up for maximum visibility */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
-          {timeSlots.map((slot) => {
+          {visibleTimeSlots.map((slot) => {
             const slotBookings = slotBookingsMap[slot.timeStr] || [];
             const isTopHour = slot.timeStr.endsWith(':00');
 
@@ -333,21 +399,21 @@ export const CalendarDashboard = ({
                     )}
                     <button
                       onClick={() => onSelectSlot(selectedDate, slot.timeStr)}
-                      className="px-2.5 py-1 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-black flex items-center gap-1 transition-all shadow-sm active:scale-95"
+                      className="px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-black flex items-center gap-1 shadow-sm active:scale-95"
                       title={`Book ${slot.displayLabel} slot`}
                     >
-                      <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                      <Plus className="w-4 h-4 stroke-[2.5]" />
                       <span>Book</span>
                     </button>
                   </div>
                 </div>
 
                 {/* Slot Games Vertical Stack */}
-                <div className="space-y-3 flex-1 min-h-[70px]">
+                <div className="space-y-3 flex-1 min-h-[75px]">
                   {slotBookings.length === 0 ? (
                     <div 
                       onClick={() => onSelectSlot(selectedDate, slot.timeStr)}
-                      className="h-full min-h-[70px] border-2 border-dashed border-slate-200 rounded-xl p-4 flex items-center justify-center text-slate-400 hover:text-cyan-700 hover:border-cyan-400 hover:bg-cyan-50/60 transition-all cursor-pointer group"
+                      className="min-h-[75px] border-2 border-dashed border-slate-200 rounded-xl p-4 flex items-center justify-center text-slate-400 hover:text-cyan-700 hover:border-cyan-400 hover:bg-cyan-50/60 transition-all cursor-pointer group"
                     >
                       <span className="text-xs sm:text-sm font-bold flex items-center gap-1.5">
                         <Plus className="w-4 h-4 group-hover:scale-110 transition-transform" />
@@ -403,15 +469,23 @@ export const CalendarDashboard = ({
                           </div>
 
                           {b.offerId && b.offerId !== 'none' && (
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <div className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-mono font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
-                                <Tag className="w-2.5 h-2.5" />
-                                {b.offerName}
+                            <div className="space-y-1">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <div className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-mono font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
+                                  <Tag className="w-2.5 h-2.5" />
+                                  {b.offerName}
+                                </div>
+                                {b.referencePerson && (
+                                  <div className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-mono font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
+                                    <ShieldCheck className="w-2.5 h-2.5 text-emerald-600" />
+                                    Ref: {b.referencePerson}
+                                  </div>
+                                )}
                               </div>
-                              {b.referencePerson && (
-                                <div className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-mono font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
-                                  <ShieldCheck className="w-2.5 h-2.5 text-emerald-600" />
-                                  Ref: {b.referencePerson}
+                              {Boolean(b.customNote || b.customDiscountReason || b.note) && (
+                                <div className="text-xs font-semibold text-slate-700 mt-1 flex items-center gap-1">
+                                  <span className="text-slate-400 font-bold">Reason:</span>
+                                  <span className="truncate">{b.customNote || b.customDiscountReason || b.note}</span>
                                 </div>
                               )}
                             </div>

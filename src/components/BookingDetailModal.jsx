@@ -174,6 +174,13 @@ export const BookingDetailModal = ({
                 <span>Attach booking / payment screenshots in closing</span>
               </div>
             )}
+
+            {(booking.referencePerson || '').toLowerCase().includes('khaja') && (
+              <div className="pt-1 flex items-center gap-1.5 text-xs font-black text-amber-950 bg-amber-100 p-2.5 rounded-xl border border-amber-300">
+                <Camera className="w-4 h-4 text-amber-700 shrink-0" />
+                <span>Attach message screenshot in closing</span>
+              </div>
+            )}
           </div>
 
         </div>

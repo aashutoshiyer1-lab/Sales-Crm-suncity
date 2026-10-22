@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
+import { updateBooking } from '../config/firebase';
 import { VENUES, PAYMENT_METHODS, OFFERS, REFERENCES } from '../config/venueData';
-import { getGameCategoryLabel } from '../utils/pricingEngine';
+import { getGameCategoryLabel, getBookingCategory } from '../utils/pricingEngine';
 import { 
   BarChart3, 
   Calendar as CalendarIcon, 
@@ -26,7 +27,9 @@ import {
   Receipt,
   Copy,
   Check,
-  Camera
+  Camera,
+  FileText,
+  MessageSquare
 } from 'lucide-react';
 
 export const SalesDashboard = ({ 
@@ -44,6 +47,19 @@ export const SalesDashboard = ({
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [copied, setCopied] = useState(false);
   const [highlightedBookingId, setHighlightedBookingId] = useState(null);
+  const [localCategoryOverrides, setLocalCategoryOverrides] = useState({});
+
+  const handleCategoryChange = async (booking, newCategory) => {
+    setLocalCategoryOverrides(prev => ({ ...prev, [booking.id]: newCategory }));
+    try {
+      await updateBooking(booking.id, {
+        categoryOverride: newCategory,
+        customCategory: newCategory
+      });
+    } catch (e) {
+      console.error('Failed to update category override:', e);
+    }
+  };
 
   const tableRef = useRef(null);
 
@@ -134,8 +150,10 @@ export const SalesDashboard = ({
     const totalRevenue = confirmedBookings.reduce((sum, b) => sum + (Number(b.totalAmount) || 0), 0);
     // Exclude Pending Games from Total Players metric
     const totalPlayers = confirmedBookings.reduce((sum, b) => sum + (Number(b.paxCount) || 0), 0);
-    // Exclude Complimentary & Pending Games from Total Games metric count
-    const totalGamesCount = confirmedBookings.filter(b => b.offerId !== 'complimentary').length;
+    // Segregate Paid and Complimentary counts
+    const complimentaryGamesCount = confirmedBookings.filter(b => b.offerId === 'complimentary' || Number(b.totalAmount) === 0).length;
+    const paidGamesCount = confirmedBookings.filter(b => b.offerId !== 'complimentary' && Number(b.totalAmount) > 0).length;
+    const totalGamesCount = paidGamesCount;
     const pendingGamesCount = pendingBookings.length;
     const totalDiscounts = confirmedBookings.reduce((sum, b) => sum + (Number(b.discountAmount) || 0), 0);
 
@@ -166,6 +184,8 @@ export const SalesDashboard = ({
       totalRevenue,
       totalPlayers,
       totalGamesCount,
+      paidGamesCount,
+      complimentaryGamesCount,
       pendingGamesCount,
       totalDiscounts,
       paymentBreakdown,
@@ -223,7 +243,7 @@ export const SalesDashboard = ({
         `"${b.phone || ''}"`,
         `"${b.email || ''}"`,
         b.paxCount || 0,
-        `"${getGameCategoryLabel(b)}"`,
+        `"${getGameCategoryLabel(b, filteredBookings)}"`,
         `"${(b.offerName || 'None').replace(/"/g, '""')}"`,
         `"${(b.referencePerson || 'N/A').replace(/"/g, '""')}"`,
         b.baseTotal || b.totalAmount || 0,
@@ -285,7 +305,7 @@ export const SalesDashboard = ({
       }
 
       copyText += `${idx + 1}. [${b.timeSlot}] ${b.date} | ${b.venue}\n`;
-      copyText += `   🎮 Game: ${b.gameName} (${getGameCategoryLabel(b)})\n`;
+      copyText += `   🎮 Game: ${b.gameName} (${getGameCategoryLabel(b, filteredBookings)})\n`;
       copyText += `   👤 Customer: ${b.customerName} (${b.phone || 'N/A'})\n`;
       copyText += `   👥 Players: ${b.paxCount}${offerStr}${refStr}\n`;
       copyText += `   💰 Amount: ${paidAmount}${paymentDetailsStr} ${statusStr}\n\n`;
@@ -495,7 +515,7 @@ export const SalesDashboard = ({
               <TrendingUp className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-3xl font-black text-slate-900 font-mono mt-3">
+          <div className="text-3xl sm:text-4xl font-black text-slate-900 font-mono mt-3">
             ₹{metrics.totalRevenue.toLocaleString()}
           </div>
           <div className="text-[11px] text-slate-600 mt-1 flex items-center gap-1 font-mono font-semibold">
@@ -511,7 +531,7 @@ export const SalesDashboard = ({
               <Users className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-3xl font-black text-slate-900 font-mono mt-3">
+          <div className="text-3xl sm:text-4xl font-black text-slate-900 font-mono mt-3">
             {metrics.totalPlayers.toLocaleString()} <span className="text-sm font-bold text-slate-500">Players</span>
           </div>
           <div className="text-[11px] text-slate-600 mt-1 font-mono font-semibold">
@@ -526,11 +546,18 @@ export const SalesDashboard = ({
               <Receipt className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-3xl font-black text-slate-900 font-mono mt-3">
-            {metrics.totalGamesCount}
+          <div className="text-3xl sm:text-4xl font-black text-slate-900 font-mono mt-3">
+            {metrics.paidGamesCount}
+            {metrics.complimentaryGamesCount > 0 && (
+              <span className="text-lg font-bold text-purple-600 ml-1.5 font-sans">
+                (+{metrics.complimentaryGamesCount} Compl.)
+              </span>
+            )}
           </div>
           <div className="text-[11px] text-slate-600 mt-1 font-mono font-semibold">
-            Confirmed game entries
+            {metrics.complimentaryGamesCount > 0 
+              ? `Total: ${metrics.paidGamesCount + metrics.complimentaryGamesCount} games (${metrics.paidGamesCount} paid + ${metrics.complimentaryGamesCount} complimentary)`
+              : 'Confirmed paid game entries'}
           </div>
         </div>
 
@@ -546,7 +573,7 @@ export const SalesDashboard = ({
               <Clock3 className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-3xl font-black text-amber-900 font-mono mt-3">
+          <div className="text-3xl sm:text-4xl font-black text-amber-900 font-mono mt-3">
             {metrics.pendingGamesCount}
           </div>
           <div className="text-[11px] text-amber-800 mt-1 font-mono font-bold flex items-center justify-between">
@@ -691,10 +718,10 @@ export const SalesDashboard = ({
                         }`}>
                           {b.venue}
                         </span>
-                        <div className="text-sm font-extrabold text-slate-900 tracking-wide flex items-center gap-1.5 flex-wrap">
+                        <div className="text-sm sm:text-base font-black text-slate-900 tracking-wide flex items-center gap-1.5 flex-wrap">
                           <span>{b.gameName}</span>
                           <span className="text-[11px] font-bold text-slate-600 font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                            ({getGameCategoryLabel(b)})
+                            ({getGameCategoryLabel(b, filteredBookings)})
                           </span>
                           <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded border ${
                             b.isWeekend ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-cyan-50 text-cyan-800 border-cyan-200'
@@ -705,39 +732,89 @@ export const SalesDashboard = ({
                       </td>
 
                       {/* Players Count & Category */}
-                      <td className="px-5 py-4 font-mono font-extrabold text-slate-900 text-xs">
+                      <td className="px-5 py-4 font-mono text-xs">
                         <div className="font-extrabold text-slate-900 text-sm">{b.paxCount} Players</div>
-                        <div className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-300 mt-1 inline-block">
-                          {getGameCategoryLabel(b)}
-                        </div>
+                        
+                        {isEscape ? (
+                          <div className="mt-1.5 space-y-1">
+                            {/* Interactive Category Selector with 2-3, 4-6, 7+ Brackets */}
+                            <div className="relative inline-block">
+                              <select
+                                value={localCategoryOverrides[b.id] || getBookingCategory(b, filteredBookings)}
+                                onChange={(e) => handleCategoryChange(b, e.target.value)}
+                                className={`text-[11px] font-black font-mono px-2.5 py-1 rounded-lg border cursor-pointer focus:outline-none transition-all shadow-xs ${
+                                  (localCategoryOverrides[b.id] || getBookingCategory(b, filteredBookings)) === '4-6'
+                                    ? 'bg-amber-100 hover:bg-amber-200 text-amber-950 border-amber-300'
+                                    : (localCategoryOverrides[b.id] || getBookingCategory(b, filteredBookings)) === '2-3'
+                                      ? 'bg-blue-100 hover:bg-blue-200 text-blue-950 border-blue-300'
+                                      : 'bg-purple-100 hover:bg-purple-200 text-purple-950 border-purple-300'
+                                }`}
+                                title="Click to change category bracket (2-3, 4-6, 7+)"
+                              >
+                                <option value="2-3">2-3 Players (Seater)</option>
+                                <option value="4-6">4-6 Players (Seater)</option>
+                                <option value="7+">7+ Players (Seater)</option>
+                              </select>
+                            </div>
+                            {(b.categoryOverride || localCategoryOverrides[b.id]) && (
+                              <div className="text-[9px] font-bold text-amber-700 font-mono flex items-center gap-0.5">
+                                <span>⚡ Overridden</span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-[10px] font-bold text-cyan-800 bg-cyan-100 px-2 py-0.5 rounded border border-cyan-300 mt-1 inline-block font-mono">
+                            Flat Rate Arena
+                          </div>
+                        )}
                       </td>
 
-                      {/* Offer & Reference */}
+                      {/* Offer & Reference (Always Shows Custom Note & Reason) */}
                       <td className="px-5 py-4 font-mono">
                         <div className="space-y-1.5">
+                          {/* Offer Name Badge */}
                           {b.offerId && b.offerId !== 'none' ? (
-                            <>
-                              <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-black text-amber-900 bg-amber-100 px-3 py-1 rounded-xl border border-amber-300 shadow-sm">
-                                <Tag className="w-3.5 h-3.5 text-amber-700" />
-                                {b.offerName}
-                              </span>
-                              {b.referencePerson && (
-                                <div className="text-xs sm:text-sm font-black text-emerald-800 flex items-center gap-1.5 bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200">
-                                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                                  Ref: {b.referencePerson}
-                                </div>
-                              )}
-                            </>
+                            <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-black text-amber-900 bg-amber-100 px-3 py-1 rounded-xl border border-amber-300 shadow-sm">
+                              <Tag className="w-3.5 h-3.5 text-amber-700" />
+                              {b.offerName || 'Special Offer'}
+                            </span>
                           ) : (
-                            <span className="text-slate-700 text-xs sm:text-sm font-extrabold bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200 inline-block">
+                            <span className="text-slate-600 text-xs sm:text-sm font-bold bg-slate-100 px-2.5 py-0.5 rounded-lg border border-slate-200 inline-block">
                               Standard Rate
                             </span>
+                          )}
+
+                          {/* Reference Person */}
+                          {b.referencePerson && (
+                            <div className="text-xs sm:text-sm font-black text-emerald-800 flex items-center gap-1.5 bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200">
+                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                              Ref: {b.referencePerson}
+                            </div>
+                          )}
+
+                          {/* Custom Note / Reason - High Visibility */}
+                          {Boolean(b.customNote || b.customDiscountReason || b.note) && (
+                            <div className="text-xs font-bold text-slate-900 bg-amber-50/90 p-2 rounded-xl border border-amber-300 mt-1 space-y-0.5 shadow-2xs">
+                              <span className="text-[10px] font-black uppercase text-amber-900 tracking-wider flex items-center gap-1">
+                                <FileText className="w-3 h-3 text-amber-700" /> Custom Note / Reason:
+                              </span>
+                              <p className="text-xs text-slate-800 font-semibold leading-relaxed">
+                                {b.customNote || b.customDiscountReason || b.note}
+                              </p>
+                            </div>
                           )}
 
                           {hasSpecialOnlineOrPrepaidPayment && (
                             <div className="inline-flex items-center gap-1.5 text-xs font-black text-purple-950 bg-purple-100 px-3 py-1.5 rounded-xl border border-purple-300 shadow-sm">
                               <Camera className="w-3.5 h-3.5 text-purple-700 shrink-0" />
                               <span>Attach booking / payment screenshots in closing</span>
+                            </div>
+                          )}
+
+                          {(b.referencePerson || '').toLowerCase().includes('khaja') && (
+                            <div className="inline-flex items-center gap-1.5 text-xs font-black text-amber-950 bg-amber-100 px-3 py-1.5 rounded-xl border border-amber-300 shadow-sm">
+                              <Camera className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                              <span>Attach message screenshot in closing</span>
                             </div>
                           )}
                         </div>
